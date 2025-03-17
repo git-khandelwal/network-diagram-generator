@@ -3,3 +3,4 @@ pandas
 google-generativeai
 networkx
 matplotlib
+python-dotenv
