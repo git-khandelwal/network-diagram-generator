@@ -12,11 +12,4 @@ def classify_device(device_name):
         return 'other'
     
 
-icons = {
-    'server': r'icons\file-server.png',
-    'router': r'icons\router.png',
-    'pc': r'icons\pc.png',
-    'switch': r'icons\switch.png',
-    'other': r'icons\cloud.png'
-}
 

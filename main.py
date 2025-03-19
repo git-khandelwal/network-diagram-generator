@@ -21,11 +21,11 @@ st.write("Upload a JSON/YAML file")
 uploaded_file = st.file_uploader("Choose a file", type=["json", "yaml", "yml"])
 
 icons = {
-    'server': r'icons\file-server.png',
-    'router': r'icons\router.png',
-    'pc': r'icons\pc.png',
-    'switch': r'icons\switch.png',
-    'other': r'icons\cloud.png'
+    'server': os.path.join(os.getcwd(), 'icons', 'file-server.png'),
+    'router': os.path.join(os.getcwd(), 'icons', 'router.png'),
+    'pc': os.path.join(os.getcwd(), 'icons', 'pc.png'),
+    'switch': os.path.join(os.getcwd(), 'icons', 'switch.png'),
+    'other': os.path.join(os.getcwd(), 'icons', 'cloud.png')
 }
 
 if uploaded_file is not None:
