@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 import ast
 import os
 from dotenv import load_dotenv
-from generator import classify_device
+from helper_ import classify_device, compare_adjacency_lists, extract_json_from_markdown
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from io import BytesIO
 
 load_dotenv()
 api_key = os.getenv("API_KEY")
@@ -50,7 +51,7 @@ if uploaded_file is not None:
             "data": data
         }
         
-        tab1, tab2, tab3 = st.tabs(["Raw Data", "Processed Data", "Graph"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Raw Data", "Processed Data", "Graph", "Graph Analysis"])
         
         with tab1:
             st.subheader("Original Data")
@@ -84,10 +85,11 @@ if uploaded_file is not None:
 
                                                 Please provide the output in the following JSON format:
                                                 ```json
-                                                {"node1": ["node2", "node3"], "node2": ["node1", "node4"], ...}"""])
+                                                {"node1": ["node2", "node3"], "node2": ["node1", "node4"], ...}```"""])
 
             st.info(f"{response.text}")
             
+            adjacency_orig = ast.literal_eval(extract_json_from_markdown(response.text))
             st.download_button(
                 label="Download Data",
                 data=processed_json,
@@ -99,14 +101,12 @@ if uploaded_file is not None:
             st.subheader("Network Graph")
             
             g = nx.Graph()
-            print(response.text)
 
             start_index = response.text.find("```json") + len("```json")
             end_index = response.text.find("```", start_index)
             json_string = response.text[start_index:end_index].strip()
             
-            print(json_string)
-            
+
             for node, neighbors in ast.literal_eval(json_string).items():
                 for neighbor in neighbors:
                     g.add_edge(node, neighbor)
@@ -114,6 +114,11 @@ if uploaded_file is not None:
             device_types = {device: classify_device(device) for device in ast.literal_eval(json_string)}
 
             pos = nx.spring_layout(g)
+
+            # Clear any existing plots and set figure size
+            plt.clf()
+            plt.figure(figsize=(10, 10))
+            plt.margins(0.2)
 
             nx.draw_networkx_edges(g, pos)
 
@@ -152,6 +157,42 @@ if uploaded_file is not None:
             # Draw labels using the offset positions
             nx.draw_networkx_labels(g, label_pos, font_size=8)
             st.pyplot(plt)
+
+        with tab4:
+            st.subheader("Graph Analysis")
+            
+            # Get the current figure
+            fig = plt.gcf()
+            buf = BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
+            buf.seek(0)
+    
+            image_data = {'mime_type': 'image/png', 'data': buf.getvalue()}
+            
+            model = genai.GenerativeModel('gemini-2.0-flash')
+
+            response_2 = model.generate_content([image_data, """Please analyze the provided image, which depicts a network diagram. Extract the nodes (devices) and the connections between them. Represent this information as an adjacency list in JSON format.
+                                                Specifically, for each node (device) in the diagram(Which can be a router, switch, server or a pc), create a key-value pair in the JSON object. The key should be the node's identifier (e.g., "node1", "serverA", "routerX"). The value should be a list containing the identifiers of all nodes directly connected to that node, including external nodes such as "Internet", "ISP", or "Backup".
+                                                The desired output format is as follows (example):
+                                                ```json
+                                                {"node1": ["node2", "node3", "Internet"], "node2": ["node1", "node4"], "node3": ["node1"], "node4": ["node2", "Backup"], "Server1": ["R2", "ISP"], "R2": ["Server1"]}```"""])
+
+            st.write("### Network Analysis")
+
+            adjacency_output = ast.literal_eval(extract_json_from_markdown(response_2.text))
+
+            external_keywords = ['isp', 'backup', 'internet', 'printer', 'cloud', 'wan', "firewall"]
+            filtered_data = {}
+            
+            for node, neighbors in adjacency_output.items():
+                # Skip nodes that match external keywords
+                if any(keyword in node.lower() for keyword in external_keywords):
+                    continue
+                filtered_data[node] = neighbors
+                
+            st.info(f"```json\n{json.dumps(filtered_data, indent=2)}\n```")
+            st.image(buf, caption="Original Graph")
+            st.write("Matching with Original Graph?", compare_adjacency_lists(filtered_data, adjacency_orig))
 
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
